@@ -5,27 +5,33 @@ import { astroMeta, luckScore } from "./utils/astro.js";
 import { nakshatraInfo } from "./utils/nakshatra.js";
 import { remedy } from "./utils/remedies.js";
 import { translate } from "./utils/translate.js";
-import { RSS, ZODIAC } from "./utils/data.js";
 
-/* 🔥 CORS HELPER — MUST */
+/* ================= CONFIG ================= */
+const RSS = "https://feeds.feedburner.com/0800-horoscope/bhNd";
+
+const ZODIAC = [
+  "aries","taurus","gemini","cancer","leo","virgo",
+  "libra","scorpio","sagittarius","capricorn","aquarius","pisces"
+];
+
+/* ================= CORS ================= */
 function cors(res){
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Origin","*");
+  res.setHeader("Access-Control-Allow-Methods","GET,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers","Content-Type");
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res){
 
-  /* ✅ CORS FIX */
   cors(res);
-  if (req.method === "OPTIONS") {
+  if(req.method === "OPTIONS"){
     return res.status(200).end();
   }
 
-  try {
-    const xml = await fetch(RSS).then(r => r.text());
+  try{
+    const xml = await fetch(RSS).then(r=>r.text());
     const parsed = await parseStringPromise(xml);
-    const items = parsed.rss.channel[0].item;
+    const items = parsed?.rss?.channel?.[0]?.item || [];
 
     const nk = nakshatraInfo();
 
@@ -37,13 +43,13 @@ export default async function handler(req, res) {
       moon_phase: nk.moon_phase
     };
 
-    for (const z of ZODIAC) {
+    for(const z of ZODIAC){
       const it = items.find(i =>
-        i.title[0].toLowerCase().includes(z)
+        i.title?.[0]?.toLowerCase().includes(z)
       );
-      if (!it) continue;
+      if(!it) continue;
 
-      const base = clean(it.description[0]);
+      const base = clean(it.description?.[0] || "");
       const astro = astroMeta(z,"daily");
       const enriched =
         `${base} ${astro.flavour} Influenced by ${astro.planet}.`;
@@ -58,15 +64,15 @@ export default async function handler(req, res) {
       };
     }
 
-    /* ✅ CACHE (VERY IMPORTANT) */
     res.setHeader(
       "Cache-Control",
       "public, s-maxage=21600, stale-while-revalidate=3600"
     );
 
-    res.json(out);
+    return res.status(200).json(out);
 
-  } catch (e) {
-    res.status(500).json({ error: "Horoscope unavailable" });
+  }catch(err){
+    console.error("API ERROR:", err);
+    return res.status(500).json({ error: "Horoscope unavailable" });
   }
 }
